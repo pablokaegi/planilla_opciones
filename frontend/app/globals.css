@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* AG Grid Dark Theme */
+.ag-theme-alpine-dark {
+  --ag-background-color: #1f2937;
+  --ag-header-background-color: #111827;
+  --ag-odd-row-background-color: #1f2937;
+  --ag-row-hover-color: #374151;
+  --ag-border-color: #374151;
+  --ag-header-foreground-color: #e5e7eb;
+  --ag-foreground-color: #f3f4f6;
+}
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

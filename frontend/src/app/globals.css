@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* AG Grid dark theme customization */
+.ag-theme-alpine-dark {
+  --ag-background-color: #1a1a1a;
+  --ag-header-background-color: #2d2d2d;
+  --ag-odd-row-background-color: #1a1a1a;
+  --ag-row-hover-color: #2d2d2d;
+  --ag-selected-row-background-color: #3a3a3a;
+}
