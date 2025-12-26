@@ -1,0 +1,28 @@
+# Render Blueprint - Infrastructure as Code
+# https://render.com/docs/blueprint-spec
+
+services:
+  # Backend - FastAPI
+  - type: web
+    name: inky-options-api
+    runtime: python
+    rootDir: inky_web/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+    healthCheckPath: /health
+
+  # Frontend - Next.js
+  - type: web
+    name: inky-options-web
+    runtime: node
+    rootDir: inky_web/frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_PUBLIC_API_URL
+        sync: false  # Set manually after backend deploys
