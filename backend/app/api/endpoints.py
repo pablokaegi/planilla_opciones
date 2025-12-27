@@ -64,111 +64,150 @@ async def get_option_chain(
                 detail=f"No options found for {ticker}. Check if ticker is correct or market is open."
             )
         
-        # Group options by strike
-        strikes_dict = {}
+        # 4. AGRUPACIÓN ESTRICTA (Fix Frankenstein Rows)
+        # Creamos un set de claves únicas: (Strike, MonthCode)
+        # Esto asegura que NO mezclemos un Call de Abril con un Put de Febrero en la misma fila.
+        unique_keys = set()
+        for opt in options:
+            unique_keys.add((opt['strike'], opt['month_code']))
         
-        for option in options:
-            # Round strike to nearest integer to ensure matching
-            # This handles any floating point precision issues
-            strike = round(float(option['strike']))
-            option_type = option['option_type']
-            
-            # Initialize strike row if not exists
-            if strike not in strikes_dict:
-                strikes_dict[strike] = {
-                    'strike': strike,
-                    'calls': [],
-                    'puts': []
-                }
-            
-            # Calculate mid price for Greeks calculation
-            bid = option.get('bid') or 0
-            ask = option.get('ask') or 0
-            last = option.get('last') or 0
-            
-            # Use last price if available, otherwise mid-point
-            if last > 0:
-                market_price = last
-            elif bid > 0 and ask > 0:
-                market_price = (bid + ask) / 2
-            elif bid > 0:
-                market_price = bid
-            elif ask > 0:
-                market_price = ask
-            else:
-                # No valid price data
-                logger.warning(f"No valid price for {option['ticker']}")
-                continue
-            
-            # Calculate Greeks only if we have a valid price
-            greeks = None
-            if market_price > 0.01:  # Minimum price threshold
-                # Calculate time to expiry in years
-                T = option['days_to_expiry'] / 365.0
-                
-                # Use the new greeks module
-                greeks = calculate_row_greeks(
-                    S=underlying_price,
-                    K=strike,
-                    T=T,
-                    r=settings.default_risk_free_rate,
-                    price=market_price,
-                    option_type=option_type  # 'call' or 'put'
-                )
-            
-            # Add to appropriate side
-            option_with_greeks = {
-                'ticker': option['ticker'],
-                'bid': bid if bid > 0 else None,
-                'ask': ask if ask > 0 else None,
-                'last': last if last > 0 else None,
-                'volume': option.get('volume'),
-                'open_interest': option.get('open_interest'),
-                'iv': greeks.get('iv') if greeks else None,
-                'delta': greeks.get('delta') if greeks else None,
-                'gamma': greeks.get('gamma') if greeks else None,
-                'theta': greeks.get('theta') if greeks else None,
-                'vega': greeks.get('vega') if greeks else None,
-            }
-            
-            if option_type == 'call':
-                strikes_dict[strike]['calls'].append(option_with_greeks)
-            else:
-                strikes_dict[strike]['puts'].append(option_with_greeks)
-        
-        # Build chain rows (straddle view)
+        # Ordenar por strike para que la tabla salga linda
+        sorted_keys = sorted(list(unique_keys), key=lambda x: x[0])
+
         chain_rows = []
-        for strike in sorted(strikes_dict.keys()):
-            strike_data = strikes_dict[strike]
+        
+        for strike, month_code in sorted_keys:
+            # Buscar Call que coincida EXACTAMENTE en Strike Y Mes
+            call = next((o for o in options 
+                         if o['strike'] == strike 
+                         and o['month_code'] == month_code 
+                         and o['option_type'] == 'call'), {})
             
-            # Get first call and put (or None if not available)
-            call = strike_data['calls'][0] if strike_data['calls'] else {}
-            put = strike_data['puts'][0] if strike_data['puts'] else {}
+            # Buscar Put que coincida EXACTAMENTE en Strike Y Mes
+            put = next((o for o in options 
+                        if o['strike'] == strike 
+                        and o['month_code'] == month_code 
+                        and o['option_type'] == 'put'), {})
             
+            # Si no hay ni Call ni Put para este vencimiento específico, saltar (edge case)
+            if not call and not put:
+                continue
+
+            # Calcular Greeks para Call si existe
+            call_with_greeks = {}
+            if call:
+                # Calculate market price for Greeks
+                bid = call.get('bid') or 0
+                ask = call.get('ask') or 0
+                last = call.get('last') or 0
+                
+                if last > 0:
+                    call_market_price = last
+                elif bid > 0 and ask > 0:
+                    call_market_price = (bid + ask) / 2
+                elif bid > 0:
+                    call_market_price = bid
+                elif ask > 0:
+                    call_market_price = ask
+                else:
+                    call_market_price = 0
+                
+                if call_market_price > 0.01:
+                    T = call['days_to_expiry'] / 365.0
+                    call_greeks = calculate_row_greeks(
+                        S=underlying_price,
+                        K=strike,
+                        T=T,
+                        r=settings.default_risk_free_rate,
+                        price=call_market_price,
+                        option_type='call'
+                    )
+                    call_with_greeks = {
+                        'ticker': call['ticker'],
+                        'bid': bid if bid > 0 else None,
+                        'ask': ask if ask > 0 else None,
+                        'last': last if last > 0 else None,
+                        'volume': call.get('volume'),
+                        'open_interest': call.get('open_interest'),
+                        'iv': call_greeks.get('iv'),
+                        'delta': call_greeks.get('delta'),
+                        'gamma': call_greeks.get('gamma'),
+                        'theta': call_greeks.get('theta'),
+                        'vega': call_greeks.get('vega'),
+                    }
+
+            # Calcular Greeks para Put si existe
+            put_with_greeks = {}
+            if put:
+                # Calculate market price for Greeks
+                bid = put.get('bid') or 0
+                ask = put.get('ask') or 0
+                last = put.get('last') or 0
+                
+                if last > 0:
+                    put_market_price = last
+                elif bid > 0 and ask > 0:
+                    put_market_price = (bid + ask) / 2
+                elif bid > 0:
+                    put_market_price = bid
+                elif ask > 0:
+                    put_market_price = ask
+                else:
+                    put_market_price = 0
+                
+                if put_market_price > 0.01:
+                    T = put['days_to_expiry'] / 365.0
+                    put_greeks = calculate_row_greeks(
+                        S=underlying_price,
+                        K=strike,
+                        T=T,
+                        r=settings.default_risk_free_rate,
+                        price=put_market_price,
+                        option_type='put'
+                    )
+                    put_with_greeks = {
+                        'ticker': put['ticker'],
+                        'bid': bid if bid > 0 else None,
+                        'ask': ask if ask > 0 else None,
+                        'last': last if last > 0 else None,
+                        'volume': put.get('volume'),
+                        'open_interest': put.get('open_interest'),
+                        'iv': put_greeks.get('iv'),
+                        'delta': put_greeks.get('delta'),
+                        'gamma': put_greeks.get('gamma'),
+                        'theta': put_greeks.get('theta'),
+                        'vega': put_greeks.get('vega'),
+                    }
+
+            # Crear la fila "Pura" (mismo vencimiento en ambos lados)
             row = OptionChainRow(
                 strike=strike,
-                # Call data
-                call_bid=call.get('bid'),
-                call_ask=call.get('ask'),
-                call_last=call.get('last'),
-                call_volume=call.get('volume'),
-                call_open_interest=call.get('open_interest'),
-                call_iv=call.get('iv'),
-                call_delta=call.get('delta'),
-                call_gamma=call.get('gamma'),
-                call_theta=call.get('theta'),
-                call_vega=call.get('vega'),
-                # Put data
-                put_bid=put.get('bid'),
-                put_ask=put.get('ask'),
-                put_last=put.get('last'),
-                put_volume=put.get('volume'),
-                put_open_interest=put.get('open_interest'),
-                put_iv=put.get('iv'),
-                put_delta=put.get('delta'),
-                put_gamma=put.get('gamma'),
-                put_theta=put.get('theta'),
-                put_vega=put.get('vega'),
+                
+                # --- CALL SIDE ---
+                call_ticker=call_with_greeks.get('ticker'),
+                call_bid=call_with_greeks.get('bid'),
+                call_ask=call_with_greeks.get('ask'),
+                call_last=call_with_greeks.get('last'),
+                call_volume=call_with_greeks.get('volume'),
+                call_open_interest=call_with_greeks.get('open_interest'),
+                call_iv=call_with_greeks.get('iv'),
+                call_delta=call_with_greeks.get('delta'),
+                call_gamma=call_with_greeks.get('gamma'),
+                call_theta=call_with_greeks.get('theta'),
+                call_vega=call_with_greeks.get('vega'),
+                
+                # --- PUT SIDE ---
+                put_ticker=put_with_greeks.get('ticker'),
+                put_bid=put_with_greeks.get('bid'),
+                put_ask=put_with_greeks.get('ask'),
+                put_last=put_with_greeks.get('last'),
+                put_volume=put_with_greeks.get('volume'),
+                put_open_interest=put_with_greeks.get('open_interest'),
+                put_iv=put_with_greeks.get('iv'),
+                put_delta=put_with_greeks.get('delta'),
+                put_gamma=put_with_greeks.get('gamma'),
+                put_theta=put_with_greeks.get('theta'),
+                put_vega=put_with_greeks.get('vega'),
             )
             
             chain_rows.append(row)
@@ -271,8 +310,11 @@ async def get_mock_chain(ticker: str) -> OptionChainResponse:
             option_type='put'
         )
         
+        call = {"ticker": f"CALL{strike}MOCK"}
+        put = {"ticker": f"PUT{strike}MOCK"}
         row = OptionChainRow(
             strike=strike,
+            call_ticker=call.get('ticker'),
             call_bid=call_bid,
             call_ask=call_ask,
             call_last=round(call_mid_price, 2),
@@ -283,6 +325,7 @@ async def get_mock_chain(ticker: str) -> OptionChainResponse:
             call_gamma=call_greeks.get("gamma"),
             call_theta=call_greeks.get("theta"),
             call_vega=call_greeks.get("vega"),
+            put_ticker=put.get('ticker'),
             put_bid=put_bid,
             put_ask=put_ask,
             put_last=round(put_mid_price, 2),
@@ -307,6 +350,56 @@ async def get_mock_chain(ticker: str) -> OptionChainResponse:
         days_to_expiry=days_to_expiry,
         chain=chain_rows
     )
+
+
+@router.get("/chain/{ticker}/smile")
+async def get_volatility_smile(ticker: str):
+    """
+    Get volatility smile data for a ticker.
+    Returns IV points for calls and puts across strikes.
+    """
+    try:
+        logger.info(f"Request for {ticker} volatility smile")
+        
+        # Get the full chain data
+        chain_data = await market_data_service.get_option_chain(ticker)
+        
+        if not chain_data or 'chain' not in chain_data:
+            raise HTTPException(status_code=404, detail=f"No option chain data found for {ticker}")
+        
+        smile_points = []
+        
+        for row in chain_data['chain']:
+            # Add call IV if available
+            if row.get('call_iv') and row['call_iv'] > 0:
+                smile_points.append({
+                    'strike': row['strike'],
+                    'iv': row['call_iv'],
+                    'option_type': 'call'
+                })
+            
+            # Add put IV if available
+            if row.get('put_iv') and row['put_iv'] > 0:
+                smile_points.append({
+                    'strike': row['strike'],
+                    'iv': row['put_iv'],
+                    'option_type': 'put'
+                })
+        
+        if not smile_points:
+            # Return empty array if no IV data
+            return []
+        
+        # Sort by strike
+        smile_points.sort(key=lambda x: x['strike'])
+        
+        return smile_points
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting volatility smile for {ticker}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/health")

@@ -3,16 +3,16 @@
 /**
  * React Query Providers and Hooks
  */
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient as useReactQueryClient } from '@tanstack/react-query';
 import { fetchOptionChain } from '@/lib/api_client';
 import type { OptionChainResponse } from '@/lib/types';
 import { ReactNode } from 'react';
 
-// Create a client
-const queryClient = new QueryClient({
+// Create a client - export for direct access if needed
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60 * 1000, // Data is fresh for 1 minute
+      staleTime: 30 * 1000, // Data is fresh for 30 seconds
       gcTime: 5 * 60 * 1000, // Cache for 5 minutes (previously cacheTime)
       retry: 2,
       refetchOnWindowFocus: false,
@@ -29,6 +29,13 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       {children}
     </QueryClientProvider>
   );
+}
+
+/**
+ * Re-export useQueryClient for convenience
+ */
+export function useQueryClient() {
+  return useReactQueryClient();
 }
 
 /**

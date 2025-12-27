@@ -44,8 +44,8 @@ class OptionChainRow(BaseModel):
     """Single row in the option chain."""
     
     strike: float
-    
     # Call side
+    call_ticker: Optional[str] = None  # Ticker del call (ej: GFGC3000AB)
     call_bid: Optional[float] = None
     call_ask: Optional[float] = None
     call_last: Optional[float] = None
@@ -56,8 +56,8 @@ class OptionChainRow(BaseModel):
     call_gamma: Optional[float] = None
     call_theta: Optional[float] = None
     call_vega: Optional[float] = None
-    
     # Put side
+    put_ticker: Optional[str] = None   # Ticker del put (ej: GFGC3000FE)
     put_bid: Optional[float] = None
     put_ask: Optional[float] = None
     put_last: Optional[float] = None

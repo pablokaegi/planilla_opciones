@@ -2,7 +2,7 @@
  * API Client for Inky Web Backend
  */
 import axios from 'axios';
-import type { OptionChainResponse } from './types';
+import type { OptionChainResponse, GexProfile, OrderFlowResponse } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -20,7 +20,7 @@ const apiClient = axios.create({
 export async function fetchOptionChain(
   ticker: string,
   daysToExpiry: number = 30,
-  useMock: boolean = false // Changed to false - use real API data by default
+  useMock: boolean = false // <--- ¡TIENE QUE ESTAR EN FALSE!
 ): Promise<OptionChainResponse> {
   const response = await apiClient.get<OptionChainResponse>(
     `/api/v1/chain/${ticker}`,
@@ -29,6 +29,39 @@ export async function fetchOptionChain(
         days_to_expiry: daysToExpiry,
         use_mock: useMock 
       },
+    }
+  );
+  return response.data;
+}
+
+/**
+ * Fetch GEX (Gamma Exposure) profile for a ticker
+ */
+export async function fetchGexProfile(
+  ticker: string,
+  daysToExpiry: number = 30
+): Promise<GexProfile> {
+  const response = await apiClient.get<GexProfile>(
+    `/api/v1/analytics/gex/${ticker}`,
+    {
+      params: { days_to_expiry: daysToExpiry }
+    }
+  );
+  return response.data;
+}
+
+/**
+ * Fetch Order Flow / CVD data for a ticker
+ */
+export async function fetchOrderFlow(
+  ticker: string,
+  days: number = 30,
+  detectDivergence: boolean = true
+): Promise<OrderFlowResponse> {
+  const response = await apiClient.get<OrderFlowResponse>(
+    `/api/v1/analytics/flow/${ticker}`,
+    {
+      params: { days, detect_divergence: detectDivergence }
     }
   );
   return response.data;

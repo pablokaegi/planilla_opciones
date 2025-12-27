@@ -5,7 +5,7 @@ FastAPI Backend Application
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.endpoints import router
+from app.api import endpoints, analytics # <--- Importa analytics
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -16,17 +16,18 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Configure CORS
+# Configure CORS - "Nuclear Option" para Desarrollo
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["*"],  # <--- CAMBIO CRÍTICO: Permitir todo
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include API routes
-app.include_router(router, prefix="/api/v1", tags=["Options"])
+app.include_router(endpoints.router, prefix="/api/v1", tags=["options"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"]) # <--- Agrega esta línea
 
 
 @app.get("/")
